@@ -1,0 +1,41 @@
+REQUIRE ["Version"]
+
+#
+# Build
+#
+FROM python:2.7-slim
+
+ADD . /src
+WORKDIR /src
+
+RUN apt-get update && apt-get install -y \
+    build-essential
+
+RUN pip wheel gunicorn json-logging-py setproctitle
+RUN pip wheel .
+RUN sed -ie s/\'0.0\'/\'{{ .Version }}\'/g setup.py
+RUN python setup.py bdist_wheel
+
+EXPORT /src/wheelhouse
+
+#
+# Run
+#
+FROM python:2.7-slim
+
+IMPORT /wheelhouse
+
+RUN pip install --no-index --find-links=file:///wheelhouse rockerdemo setproctitle gunicorn json-logging-py
+
+RUN rm -rf /wheelhouse
+
+COPY docker/logging.conf /logging.conf
+
+COPY docker/gunicorn.conf /gunicorn.conf
+
+EXPOSE 8000
+
+ENTRYPOINT ["/usr/local/bin/gunicorn", '--name", "rockerdemo", "--config", "/gunicorn.conf", "--log-config", "/logging.conf", "-b", ":8000", "rockerdemo:app"]
+
+PUSH sebest/rocker-with-python-project:{{ .Version }}
+PUSH sebest/rocker-with-python-project:latest
